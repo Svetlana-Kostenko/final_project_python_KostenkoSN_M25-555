@@ -1,4 +1,16 @@
 from valutatrade_hub.core.models import *
+from valutatrade_hub.core.usecases import *
+import json
+import hashlib
+import datetime
+import argparse
+import os
+from typing import Dict, Any
+import re
+
+# Пути к файлам данных
+USERS_FILE = "users.json"
+PORTFOLIOS_FILE = "portfolios.json"
 
 def main():
     """ main function """
@@ -53,6 +65,52 @@ def main():
     print(f"Общая стоимость: {total_usd:.2f} USD")  # ~4000 USD
     print(portfolio.to_dict())
     
+    while True:
+        try:
+            # Получаем команду от пользователя
+            command = input("> ").strip()
+
+            if command.lower() == 'exit':
+                print("До свидания!")
+                break
+
+            if not command.startswith('register'):
+                print("Неизвестная команда. Используйте 'register --username <имя> --password <пароль>'")
+                continue
+
+            # Разбираем команду
+            args = parse_command(command)
+
+            if 'username' not in args:
+                print("Ошибка: не указан --username")
+                continue
+            if 'password' not in args:
+                print("Ошибка: не указан --password")
+                continue
+
+            # Регистрируем пользователя
+            register_user(args['username'], args['password'])
+
+        except KeyboardInterrupt:
+            print("\nДо свидания!")
+            break
+        except Exception as e:
+            print(f"Неожиданная ошибка: {e}")
+
+
+def parse_command(command: str) -> Dict[str, str]:
+    """Разбирает командную строку и возвращает словарь параметров."""
+    args = {}
+    # Ищем --username и --password с помощью регулярных выражений
+    username_match = re.search(r'--username\s+(\S+)', command)
+    password_match = re.search(r'--password\s+(\S+)', command)
+
+    if username_match:
+        args['username'] = username_match.group(1)
+    if password_match:
+        args['password'] = password_match.group(1)
+
+    return args
     
     
 if __name__ == "__main__":
