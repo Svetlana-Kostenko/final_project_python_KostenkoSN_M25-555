@@ -65,31 +65,45 @@ def main():
     print(f"Общая стоимость: {total_usd:.2f} USD")  # ~4000 USD
     print(portfolio.to_dict())
     
+    print("Консольная система аутентификации")
+    print("Доступные команды:")
+    print("  register --username <имя> --password <пароль> — регистрация")
+    print("  login --username <имя> --password <пароль> — вход в систему")
+    print("  exit — выход")
+    print()
+
     while True:
         try:
-            # Получаем команду от пользователя
             command = input("> ").strip()
-
             if command.lower() == 'exit':
                 print("До свидания!")
                 break
 
-            if not command.startswith('register'):
-                print("Неизвестная команда. Используйте 'register --username <имя> --password <пароль>'")
+            if not command:
                 continue
 
-            # Разбираем команду
             args = parse_command(command)
 
-            if 'username' not in args:
-                print("Ошибка: не указан --username")
-                continue
-            if 'password' not in args:
-                print("Ошибка: не указан --password")
-                continue
+            if command.startswith('register'):
+                if 'username' not in args:
+                    print("Ошибка: не указан --username")
+                    continue
+                if 'password' not in args:
+                    print("Ошибка: не указан --password")
+                    continue
+                register_user(args['username'], args['password'])
 
-            # Регистрируем пользователя
-            register_user(args['username'], args['password'])
+            elif command.startswith('login'):
+                if 'username' not in args:
+                    print("Ошибка: не указан --username")
+                    continue
+                if 'password' not in args:
+                    print("Ошибка: не указан --password")
+                    continue
+                login_user(args['username'], args['password'])
+
+            else:
+                print("Неизвестная команда. Используйте register или login.")
 
         except KeyboardInterrupt:
             print("\nДо свидания!")

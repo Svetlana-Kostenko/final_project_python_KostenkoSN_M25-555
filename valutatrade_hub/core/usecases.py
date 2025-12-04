@@ -86,4 +86,26 @@ def register_user(username: str, password: str):
 
     # Шаг 6: Выводим сообщение об успехе
     print(f"Пользователь '{username}' зарегистрирован (id={user_id}). Войдите: login --username {username} --password ****")
-
+    
+    
+    
+def login_user(username: str, password: str):
+    """Выполняет вход пользователя в систему."""
+    users = load_users()
+    
+    # Шаг 1: Найти пользователя по username
+    user = None
+    for u in users.values():
+        if u.username == username:
+            user = u
+            break
+    
+    if not user:
+        print(f"Пользователь '{username}' не найден")
+        return
+    
+    # Шаг 2: Сравнить хеш пароля
+    if user.verify_password(password):
+        print(f"Вы вошли как '{username}'")
+    else:
+        print("Неверный пароль")
