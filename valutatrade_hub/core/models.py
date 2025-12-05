@@ -281,7 +281,7 @@ class Portfolio:
         return {
             "user_id": self._user_id,
             "wallets": {
-                code: wallet.to_dict() for code, wallet in self._wallets.items()
+                code: wallet for code, wallet in self._wallets.items()
             }
         }
 

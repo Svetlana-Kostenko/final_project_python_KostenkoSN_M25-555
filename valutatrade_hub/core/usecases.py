@@ -25,12 +25,19 @@ def save_users(users: Dict[int, User]):
     with open(USERS_FILE, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
 
-def load_portfolios() -> Dict[int, Dict]:
-    """Загружает портфели из portfolios.json."""
+def load_portfolios() -> list:
+    """Загружает портфели из portfolios.json (ожидает список)."""
     if not os.path.exists(PORTFOLIOS_FILE):
-        return {}
+        return []  # Возвращаем пустой список, если файла нет
+
     with open(PORTFOLIOS_FILE, "r", encoding="utf-8") as f:
-        return json.load(f)
+        data = json.load(f)
+
+    # Проверяем, что загруженные данные — это список
+    if not isinstance(data, list):
+        raise ValueError(f"Ожидался список в {PORTFOLIOS_FILE}, но получен {type(data)}")
+
+    return data
 
 def save_portfolios(portfolios: Dict[int, Dict]):
     """Сохраняет портфели в portfolios.json."""
@@ -81,7 +88,8 @@ def register_user(username: str, password: str):
 
     # Шаг 5: Создаём пустой портфель
     portfolios = load_portfolios()
-    portfolios[user_id] = {}
+    user_portfolio = Portfolio(user_id, {"USD": 1000})
+    portfolios.append(user_portfolio.to_dict())
     save_portfolios(portfolios)
 
     # Шаг 6: Выводим сообщение об успехе
@@ -109,3 +117,74 @@ def login_user(username: str, password: str):
         print(f"Вы вошли как '{username}'")
     else:
         print("Неверный пароль")
+        
+        
+def show_portfolio(username: str, base: str = "USD"):
+    """
+    Показывает портфель пользователя в заданной базовой валюте.
+    """
+    users = load_users()
+    portfolios = load_portfolios()
+
+    # Шаг 1: Убедиться, что пользователь залогинен (есть в users)
+    user = None
+    for u in users.values():
+        if u.username == username:
+            user = u
+            break
+
+    if not user:
+        print("Сначала выполните login")
+        return
+
+    user_id = user.user_id
+    print(user_id)
+    # Шаг 2: Загрузить портфель пользователя
+    portfolio = []
+    for p in portfolios:
+        if user_id in list(p.values()):
+            portfolio = p["wallets"]
+            break
+
+
+    if not portfolio:
+        print(f"Портфель пользователя '{username}' пуст")
+        return
+
+    # Курсы валют (в реальности нужно брать из API; здесь — заглушка)
+    exchange_rates = {
+        "USD": 1.0,
+        "EUR": 1.07,
+        "BTC": 59300.0,  # примерная стоимость
+        "GBP": 1.26,
+        "JPY": 0.0067,
+    }
+
+    # Проверить, что базовая валюта известна
+    if base not in exchange_rates:
+        print(f"Неизвестная базовая валюта '{base}'")
+        return
+
+    base_rate = exchange_rates[base]
+
+    print(f"\nПортфель пользователя '{username}' (база: {base}):")
+    total_in_base = 0.0
+
+    # Шаг 4: Для каждого кошелька
+    for currency, balance in portfolio.items():
+        if currency not in exchange_rates:
+            print(f"  - {currency}: {balance:.2f} → курс неизвестен")
+            continue
+
+        # Стоимость в базовой валюте
+        rate = exchange_rates[currency]
+        value_in_base = balance * (rate / base_rate)
+        total_in_base += value_in_base
+
+
+        print(f"  - {currency}: {balance:.2f} → {value_in_base:.2f} {base}")
+
+
+    # Шаг 5: Итоговая сумма
+    print("-" * 40)
+    print(f"ИТОГО: {total_in_base:.2f} {base}\n")

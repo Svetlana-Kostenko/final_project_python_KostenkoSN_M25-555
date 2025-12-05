@@ -71,8 +71,10 @@ def main():
     print("  login --username <имя> --password <пароль> — вход в систему")
     print("  exit — выход")
     print()
-
+    active_session_username = None
+    
     while True:
+        
         try:
             command = input("> ").strip()
             if command.lower() == 'exit':
@@ -101,7 +103,14 @@ def main():
                     print("Ошибка: не указан --password")
                     continue
                 login_user(args['username'], args['password'])
+                active_session_username = args['username']
+                
+            elif command.startswith('show-portfolio'):
 
+                base = args.get('base', 'USD')  # по умолчанию USD
+                show_portfolio(active_session_username, base)
+                
+            
             else:
                 print("Неизвестная команда. Используйте register или login.")
 
@@ -118,11 +127,14 @@ def parse_command(command: str) -> Dict[str, str]:
     # Ищем --username и --password с помощью регулярных выражений
     username_match = re.search(r'--username\s+(\S+)', command)
     password_match = re.search(r'--password\s+(\S+)', command)
+    base_match = re.search(r'--base\s+(\S+)', command) 
 
     if username_match:
         args['username'] = username_match.group(1)
     if password_match:
         args['password'] = password_match.group(1)
+    if base_match:
+        args['base'] = base_match.group(1)
 
     return args
     
