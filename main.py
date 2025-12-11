@@ -1,12 +1,10 @@
-from valutatrade_hub.core.models import *
-from valutatrade_hub.core.usecases import *
-import json
-import hashlib
 import datetime
-import argparse
-import os
-from typing import Dict, Any
 import re
+from typing import Dict
+
+from valutatrade_hub.core.models import User, Wallet, Portfolio, ExchangeRates
+from valutatrade_hub.core.usecases import register_user, login_user, show_portfolio, buy, sell
+
 
 # Пути к файлам данных
 USERS_FILE = "users.json"
@@ -71,7 +69,13 @@ def main():
     print("  login --username <имя> --password <пароль> — вход в систему")
     print("  exit — выход")
     print()
-    active_session_username = None
+    
+    active_obj_user = None
+    active_obj_portfolio = None
+    base_currency = None
+    er = ExchangeRates()
+    print (er.exchange_rate_default)
+    
     
     while True:
         
@@ -102,13 +106,32 @@ def main():
                 if 'password' not in args:
                     print("Ошибка: не указан --password")
                     continue
-                login_user(args['username'], args['password'])
-                active_session_username = args['username']
+                active_obj_user, active_obj_portfolio = login_user(args['username'], args['password'])
+                base_currency = input("Введите базовую валюту для операций: ").upper()
+                print(f"Установлена базовая валюта: {base_currency}")
                 
             elif command.startswith('show-portfolio'):
 
-                base = args.get('base', 'USD')  # по умолчанию USD
-                show_portfolio(active_session_username, base)
+                base = args.get('base', base_currency)  # по умолчанию USD
+                show_portfolio(active_obj_user, active_obj_portfolio, er, base)
+            
+            elif command.startswith('buy'):
+                
+                amount = args.get('amount', None)
+                buy(active_obj_user, currency, amount, base_currency)
+                
+            elif command.startswith('sell'):
+                
+                amount = args.get('amount', None)
+                sell(active_obj_user, currency, amount, base_currency)
+                
+            elif command.startswith('logout'):
+                active_obj_user = None
+                active_obj_portfolio = None
+                base_currency = None
+                
+                print("Сессия завершена")
+                
                 
             
             else:
@@ -118,7 +141,7 @@ def main():
             print("\nДо свидания!")
             break
         except Exception as e:
-            print(f"Неожиданная ошибка: {e}")
+            print(e)
 
 
 def parse_command(command: str) -> Dict[str, str]:
@@ -127,7 +150,10 @@ def parse_command(command: str) -> Dict[str, str]:
     # Ищем --username и --password с помощью регулярных выражений
     username_match = re.search(r'--username\s+(\S+)', command)
     password_match = re.search(r'--password\s+(\S+)', command)
-    base_match = re.search(r'--base\s+(\S+)', command) 
+    base_match = re.search(r'--base\s+(\S+)', command)
+    currency_match = re.search(r'--currency\s+(\S+)', command)
+    amount_match = re.search(r'--amount\s+(\S+)', command)
+
 
     if username_match:
         args['username'] = username_match.group(1)
@@ -135,6 +161,10 @@ def parse_command(command: str) -> Dict[str, str]:
         args['password'] = password_match.group(1)
     if base_match:
         args['base'] = base_match.group(1)
+    if currency_match:
+        args['currency'] = currency_match.group(1)
+    if amount_match:
+        args['amount'] = amount_match.group(1)
 
     return args
     

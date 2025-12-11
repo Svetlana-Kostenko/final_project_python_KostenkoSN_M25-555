@@ -1,7 +1,27 @@
 import hashlib
 import datetime
 import json
-from typing import Optional
+import os
+from typing import Any, Dict, Optional
+
+# Пути к файлам данных
+USERS_FILE = "data/users.json"
+PORTFOLIOS_FILE = "data/portfolios.json"
+
+
+class ExchangeRates:
+    def __init__(self):
+        self._exchange_rate_default = {
+        "USD": 1.0,
+        "EUR": 1.1,    # 1 EUR = 1.1 USD
+        "BTC": 50000, # 1 BTC = 50 000 USD
+        "GBP": 1.3,
+        "JPY": 0.007
+    }
+    
+    @property
+    def exchange_rate_default(self):
+        return self._exchange_rate_default
 
 
 
@@ -103,10 +123,21 @@ class User:
             salt=data["salt"],
             registration_date=registration_date
         )
-
-
-import json
-from typing import Dict
+    @classmethod    
+    def load_users(cls):
+        """Загружает пользователей из users.json."""
+        if not os.path.exists(USERS_FILE):
+            return {}
+        with open(USERS_FILE, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        return {user["user_id"]: cls.from_dict(user) for user in data}
+        
+    @classmethod
+    def save_users(cls, users: Dict):
+        """Сохраняет пользователей в users.json."""
+        data = [user.to_dict() for user in users.values()]
+        with open(USERS_FILE, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
 
 
 
@@ -169,7 +200,7 @@ class Wallet:
 
     def to_dict(self) -> Dict:
         """Преобразует объект в словарь для сохранения в JSON."""
-        return self.get_balance_info()
+        return {self._currency_code: {"balance": self._balance}}
 
     @classmethod
     def from_dict(cls, data: Dict):
@@ -180,8 +211,7 @@ class Wallet:
         )
         
         
-import json
-from typing import Dict, Optional
+
 
 
 
@@ -205,6 +235,13 @@ class Portfolio:
         """
         self._user_id = user_id
         self._wallets: Dict[str, Wallet] = wallets or {}
+        self.EXCHANGE_RATES = {
+                "USD": 1.0,
+                "EUR": 1.1,    # 1 EUR = 1.1 USD
+                "BTC": 50000, # 1 BTC = 50 000 USD
+                "GBP": 1.3,
+                "JPY": 0.007
+            }
 
     @property
     def user(self) -> int:
@@ -247,7 +284,7 @@ class Portfolio:
         :param currency_code: код валюты
         :return: объект Wallet или None, если не найден
         """
-        return self._wallets.get(currency_code.upper())
+        return self._wallets.get(currency_code.upper(), None)
 
     def get_total_value(self, base_currency: str = "USD") -> float:
         """
@@ -280,9 +317,9 @@ class Portfolio:
         """
         return {
             "user_id": self._user_id,
-            "wallets": {
-                code: wallet for code, wallet in self._wallets.items()
-            }
+            "wallets": 
+                {currency: {"balance": wallet.balance} for currency, wallet in self._wallets.items()}
+            
         }
 
     @classmethod
@@ -297,4 +334,70 @@ class Portfolio:
             for code, wallet_data in data["wallets"].items()
         }
         return cls(user_id=data["user_id"], wallets=wallets)
+        
+    @classmethod
+    def from_json(cls, data: Dict[str, Any]):
+        """
+        Создаёт объект Portfolio из словаря (например, из JSON).
+        """
+        user_id = data["user_id"]
+        
+        # Преобразуем wallets: ключи — валюты, значения — балансы
+        wallets = {}
+        for currency, balance in data.get("wallets", {}).items():
+            wallets[currency] = Wallet(currency_code=currency, balance=balance)
+        
+        return cls(user_id=user_id, wallets=wallets)
+
+    @classmethod
+    def load_from_file(cls, filename: str) -> list:
+        """
+        Загружает список портфелей из JSON‑файла.
+        Поддерживает формат:
+        [
+          {
+            "user_id": 1,
+            "wallets": {
+              "USD": {"balance": 1500.0},
+              "BTC": {"balance": 0.05}
+            }
+          }
+        ]
+        """
+        try:
+            with open(filename, "r", encoding="utf-8") as f:
+                data = json.load(f)  # data — список словарей
+            
+            portfolios = []
+            for item in data:
+                # Проверяем наличие обязательных полей
+                if "user_id" not in item or "wallets" not in item:
+                    raise ValueError(f"Некорректный формат записи в файле: {item}")
+                
+                user_id = item["user_id"]
+                wallets_data = item["wallets"]
+                
+                # Создаём кошельки из вложенной структуры
+                wallets = {}
+                for currency, wallet_info in wallets_data.items():
+                    if "balance" not in wallet_info:
+                        raise ValueError(f"В кошельке {currency} отсутствует поле 'balance'")
+                    balance = wallet_info["balance"]
+                    wallets[currency] = Wallet(currency_code=currency, balance=balance)
+                
+                # Создаём портфель
+                portfolio = cls(user_id=user_id, wallets=wallets)
+                portfolios.append(portfolio)
+            
+            return portfolios
+
+        except FileNotFoundError:
+            print(f"Файл {filename} не найден. Создаётся пустой список портфелей.")
+            return []
+        except json.JSONDecodeError as e:
+            print(f"Ошибка чтения JSON из файла {filename}: {e}")
+            return []
+        except Exception as e:
+            print(f"Неожиданная ошибка при загрузке портфелей: {e}")
+            return []
 
