@@ -3,6 +3,17 @@ import datetime
 import json
 import os
 from typing import Any, Dict, Optional
+import json
+import time
+from datetime import datetime, timedelta
+from typing import Optional, Dict, Tuple
+from valutatrade_hub.core.exceptions import InsufficientFundsError
+
+# Путь к кешу
+RATES_FILE = "data/rates.json"
+
+# Время жизни кеша (5 минут)
+CACHE_TTL = 300  # секунд
 
 # Пути к файлам данных
 USERS_FILE = "data/users.json"
@@ -23,7 +34,7 @@ class ExchangeRates:
     def exchange_rate_default(self):
         return self._exchange_rate_default
 
-
+er = ExchangeRates()
 
 class User:
     def __init__(
@@ -32,7 +43,7 @@ class User:
         username: str,
         hashed_password: str,
         salt: str,
-        registration_date: datetime.datetime
+        registration_date: datetime
     ):
         # Приватные атрибуты
         self._user_id = user_id
@@ -59,7 +70,7 @@ class User:
         return self._salt
 
     @property
-    def registration_date(self) -> datetime.datetime:
+    def registration_date(self) -> datetime:
         return self._registration_date
 
     # Сеттеры с проверками
@@ -115,7 +126,7 @@ class User:
     @classmethod
     def from_dict(cls, data: dict):
         """Создаёт объект User из словаря (например, из JSON)."""
-        registration_date = datetime.datetime.fromisoformat(data["registration_date"])
+        registration_date = datetime.fromisoformat(data["registration_date"])
         return cls(
             user_id=data["user_id"],
             username=data["username"],
@@ -185,8 +196,13 @@ class Wallet:
             raise TypeError("Сумма снятия должна быть числом (int или float).")
         if amount <= 0:
             raise ValueError("Сумма снятия должна быть положительной.")
-        if self._balance < amount:
-            return False  # Недостаточно средств
+        if self._balance < amount:        
+            raise InsufficientFundsError(
+                available=self._balance,
+                required=amount,
+                code=self.currency_code
+            )
+            
         
         self._balance -= amount
         return True
@@ -219,13 +235,13 @@ class Portfolio:
     """Портфель пользователя: управление кошельками в разных валютах."""
 
     # Фиксированные курсы для упрощения (в реальной системе — API)
-    EXCHANGE_RATES = {
-        "USD": 1.0,
-        "EUR": 1.1,    # 1 EUR = 1.1 USD
-        "BTC": 50000, # 1 BTC = 50 000 USD
-        "GBP": 1.3,
-        "JPY": 0.007
-    }
+ #   EXCHANGE_RATES = {
+  #      "USD": 1.0,
+  #      "EUR": 1.1,    # 1 EUR = 1.1 USD
+  #      "BTC": 50000, # 1 BTC = 50 000 USD
+   #     "GBP": 1.3,
+  #      "JPY": 0.007
+ #   }
 
     def __init__(self, user_id: int, wallets: Optional[Dict[str, Wallet]] = None):
         """
@@ -235,13 +251,14 @@ class Portfolio:
         """
         self._user_id = user_id
         self._wallets: Dict[str, Wallet] = wallets or {}
-        self.EXCHANGE_RATES = {
-                "USD": 1.0,
-                "EUR": 1.1,    # 1 EUR = 1.1 USD
-                "BTC": 50000, # 1 BTC = 50 000 USD
-                "GBP": 1.3,
-                "JPY": 0.007
-            }
+        self.EXCHANGE_RATES = er.exchange_rate_default
+        #{
+     #           "USD": 1.0,
+     #           "EUR": 1.1,    # 1 EUR = 1.1 USD
+     #           "BTC": 50000, # 1 BTC = 50 000 USD
+      #          "GBP": 1.3,
+      #          "JPY": 0.007
+      #      }
 
     @property
     def user(self) -> int:
@@ -315,6 +332,7 @@ class Portfolio:
         Преобразует портфель в словарь для сохранения в JSON.
         :return: словарь с данными портфеля
         """
+        
         return {
             "user_id": self._user_id,
             "wallets": 
@@ -400,4 +418,87 @@ class Portfolio:
         except Exception as e:
             print(f"Неожиданная ошибка при загрузке портфелей: {e}")
             return []
+            
+            
+class RateService:
+    @staticmethod
+    def load_cache() -> Dict[str, Dict[str, float]]:
+        """Загружает кеш из файла. Возвращает пустой dict при ошибке."""
+        try:
+            with open(RATES_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except (FileNotFoundError, json.JSONDecodeError):
+            return {}
+
+    @staticmethod
+    def save_cache(data: Dict[str, Dict[str, float]]):
+        """Сохраняет кеш в файл."""
+        with open(RATES_FILE, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+
+    @staticmethod
+    def is_cache_fresh(timestamp_str: str) -> bool:
+        """Проверяет, что метка времени в кеше моложе CACHE_TTL."""
+        try:
+            cached_time = datetime.fromisoformat(timestamp_str)
+            return datetime.now() - cached_time < timedelta(seconds=CACHE_TTL)
+        except ValueError:
+            return False
+
+    @classmethod
+    def get_rate(cls, from_curr: str, to_curr: str) -> Optional[Tuple[float, str]]:
+        """
+        Возвращает курс from_curr → to_curr и метку времени.
+        Если кеш устарел или отсутствует — запрашивает новые данные.
+        """
+        # Нормализуем коды
+        from_curr = from_curr.upper()
+        to_curr = to_curr.upper()
+
+        # Загружаем кеш
+        cache = cls.load_cache()
+        print(cache)
+
+        # Проверяем, есть ли свежий курс в кеше
+        if (from_curr in cache and to_curr in cache[from_curr] and
+                cls.is_cache_fresh(cache[from_curr]["timestamp"])):
+            rate = cache[from_curr][to_curr]
+            timestamp = cache[from_curr]["timestamp"]
+            return rate, timestamp
+
+        # Если кеш устарел или отсутствует — запрашиваем новые данные (заглушка)
+        try:
+            # Здесь должен быть вызов Parser Service
+            # Для примера используем заглушку:
+            new_rate = cls._fetch_rate_from_parser(from_curr, to_curr)
+            if new_rate is None:
+                return None
+
+            # Обновляем кеш
+            timestamp = datetime.now().isoformat()
+            if from_curr not in cache:
+                cache[from_curr] = {}
+            cache[from_curr][to_curr] = new_rate
+            cache[from_curr]["timestamp"] = timestamp
+            cls.save_cache(cache)
+
+            return new_rate, timestamp
+
+        except Exception:
+            return None
+
+    @staticmethod
+    def _fetch_rate_from_parser(from_curr: str, to_curr: str) -> Optional[float]:
+        """
+        Заглушка для вызова Parser Service.
+        В реальной реализации здесь HTTP‑запрос к API.
+        """
+        # Пример: фиксированные курсы для демонстрации
+        mock_rates = {
+            ("USD", "BTC"): 0.00001685,
+            ("BTC", "USD"): 59337.21,
+            ("EUR", "USD"): 1.11,
+            # ... другие пары
+        }
+        return mock_rates.get((from_curr, to_curr))
 

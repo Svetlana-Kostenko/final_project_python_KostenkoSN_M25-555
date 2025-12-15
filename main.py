@@ -1,67 +1,21 @@
 import datetime
 import re
 from typing import Dict
+import json
 
 from valutatrade_hub.core.models import User, Wallet, Portfolio, ExchangeRates
-from valutatrade_hub.core.usecases import register_user, login_user, show_portfolio, buy, sell
+from valutatrade_hub.core.usecases import register_user, login_user, show_portfolio, buy, sell,get_rate
 
 
 # Пути к файлам данных
 USERS_FILE = "users.json"
 PORTFOLIOS_FILE = "portfolios.json"
+RATES_FILE = "data/rates.json"
 
 def main():
     """ main function """
     print("final_project")
-    # Создание пользователя
-    user = User(
-        user_id=1,
-        username="alice",
-        hashed_password="",  # изначально пустой
-        salt="x5T9!",
-        registration_date=datetime.datetime(2025, 10, 9, 12, 0, 0)
-    )
 
-
-    print(user.get_user_info())
-    # Создание кошелька
-    wallet = Wallet(currency_code="BTC", balance=0.05)
-
-    # Пополнение
-    wallet.deposit(0.01)
-    print(wallet.get_balance_info())  # {'currency_code': 'BTC', 'balance': 0.06}
-
-    # Снятие (успешно)
-    success = wallet.withdraw(0.02)
-    print(success)  # True
-    print(wallet.balance)  # 0.04
-
-    # Снятие (недостаточно средств)
-    success = wallet.withdraw(1.0)
-    print(success)  # False
-
-    # Создание портфеля
-    portfolio = Portfolio(user_id=1)
-
-    # Добавление кошельков
-    portfolio.add_currency("USD")
-    portfolio.add_currency("EUR")
-    portfolio.add_currency("BTC")
-
-    # Пополнение кошельков
-    usd_wallet = portfolio.get_wallet("USD")
-    usd_wallet.deposit(1500.0)
-
-    eur_wallet = portfolio.get_wallet("EUR")
-    eur_wallet.deposit(200.0)
-
-    btc_wallet = portfolio.get_wallet("BTC")
-    btc_wallet.deposit(0.05)
-
-    # Общая стоимость в USD
-    total_usd = portfolio.get_total_value("USD")
-    print(f"Общая стоимость: {total_usd:.2f} USD")  # ~4000 USD
-    print(portfolio.to_dict())
     
     print("Консольная система аутентификации")
     print("Доступные команды:")
@@ -74,8 +28,8 @@ def main():
     active_obj_portfolio = None
     base_currency = None
     er = ExchangeRates()
-    print (er.exchange_rate_default)
-    
+
+
     
     while True:
         
@@ -107,7 +61,8 @@ def main():
                     print("Ошибка: не указан --password")
                     continue
                 active_obj_user, active_obj_portfolio = login_user(args['username'], args['password'])
-                base_currency = input("Введите базовую валюту для операций: ").upper()
+                print(active_obj_portfolio)
+                base_currency = input("Введите базовую валюту для операций: ").strip().upper()
                 print(f"Установлена базовая валюта: {base_currency}")
                 
             elif command.startswith('show-portfolio'):
@@ -118,12 +73,22 @@ def main():
             elif command.startswith('buy'):
                 
                 amount = args.get('amount', None)
-                buy(active_obj_user, currency, amount, base_currency)
+                currency = args.get('currency', None)
+                portfolio = buy(active_obj_user, currency, amount, base_currency)
+                active_obj_portfolio = portfolio
                 
             elif command.startswith('sell'):
                 
                 amount = args.get('amount', None)
-                sell(active_obj_user, currency, amount, base_currency)
+                currency = args.get('currency', None)
+                portfolio = sell(active_obj_user, currency, amount, base_currency)               
+                active_obj_portfolio = portfolio
+                
+            elif command.startswith('get-rate'):
+                
+                from_  = args.get('from', None)
+                to_ = args.get('to', None)
+                get_rate(from_, to_)
                 
             elif command.startswith('logout'):
                 active_obj_user = None
@@ -153,6 +118,9 @@ def parse_command(command: str) -> Dict[str, str]:
     base_match = re.search(r'--base\s+(\S+)', command)
     currency_match = re.search(r'--currency\s+(\S+)', command)
     amount_match = re.search(r'--amount\s+(\S+)', command)
+    from_match = re.search(r'--from\s+(\S+)', command)
+    to_match = re.search(r'--to\s+(\S+)', command)
+        
 
 
     if username_match:
@@ -165,6 +133,10 @@ def parse_command(command: str) -> Dict[str, str]:
         args['currency'] = currency_match.group(1)
     if amount_match:
         args['amount'] = amount_match.group(1)
+    if from_match:
+        args['from'] = from_match.group(1)
+    if to_match:
+        args['to'] = to_match.group(1)
 
     return args
     
