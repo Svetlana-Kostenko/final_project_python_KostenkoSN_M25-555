@@ -85,7 +85,7 @@ def register_user(username: str, password: str):
         username=username,
         hashed_password=hashed_password,
         salt=salt,
-        registration_date=datetime.datetime.now()
+        registration_date=datetime.now()
     )
 
     # Добавляем пользователя в словарь

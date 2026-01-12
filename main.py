@@ -5,6 +5,12 @@ import json
 
 from valutatrade_hub.core.models import User, Wallet, Portfolio, ExchangeRates
 from valutatrade_hub.core.usecases import register_user, login_user, show_portfolio, buy, sell,get_rate
+from parse_service.updater import RatesUpdater
+from parse_service.api_clients import BaseApiClient, CoinGeckoClient, ExchangeRateApiClient
+
+CG = CoinGeckoClient()
+ER = ExchangeRateApiClient()
+clients_lst = [CG, ER]
 
 
 # Пути к файлам данных
@@ -97,7 +103,8 @@ def main():
                 
                 print("Сессия завершена")
                 
-                
+            elif command.startswith('update'):
+                RatesUpdater(clients_lst).run_update()
             
             else:
                 print("Неизвестная команда. Используйте register или login.")
