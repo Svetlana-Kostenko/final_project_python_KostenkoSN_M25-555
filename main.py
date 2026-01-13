@@ -94,7 +94,7 @@ def main():
                 
                 from_  = args.get('from', None)
                 to_ = args.get('to', None)
-                get_rate(from_, to_)
+                get_rate(from_, to_, er)
                 
             elif command.startswith('logout'):
                 active_obj_user = None

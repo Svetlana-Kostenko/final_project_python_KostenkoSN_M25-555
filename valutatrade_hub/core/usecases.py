@@ -297,7 +297,8 @@ def buy(user: User, currency: str, amount: float, base_currency: str = "USD"):
         return f"Ошибка при обновлении баланса: {str(e)}"
     
     portfolios[index] = portfolio.to_dict()
-    save_portfolios(portfolios)
+    portfolios_as_dicts = [p.to_dict() if isinstance(p, Portfolio) else p for p in portfolios]
+    save_portfolios(portfolios_as_dicts)
     
     
 
@@ -398,12 +399,13 @@ def sell(user: User, currency: str, amount: float, base_currency: str = "USD"):
         return f"Ошибка при обновлении баланса: {str(e)}"
     
     portfolios[index] = portfolio.to_dict()
-    save_portfolios(portfolios)
+    portfolios_as_dicts = [p.to_dict() if isinstance(p, Portfolio) else p for p in portfolios]
+    save_portfolios(portfolios_as_dicts)
 
     return portfolio
     
     
-def get_rate__old(from_curr, to_curr) -> str:
+def get_rate(from_curr, to_curr, er) -> str:
     """
     Обрабатывает команду get-rate.
     args — список аргументов после имени команды (например, ["--from", "USD", "--to", "BTC"]).
@@ -418,30 +420,21 @@ def get_rate__old(from_curr, to_curr) -> str:
     from_curr = from_curr.upper()
     to_curr = to_curr.upper()
 
-        # 2. Получение курса
-    rate_service = RateService()
-    result = rate_service.get_rate(from_curr, to_curr)
-    print(result)
 
-    if result is None:
-        print(f"Курс {from_curr}→{to_curr} недоступен. Повторите попытку позже.")
-
-    rate, timestamp = result
-
-        # 3. Формируем вывод
-    dt = datetime.fromisoformat(timestamp)
-    formatted_time = dt.strftime("%Y-%m-%d %H:%M:%S")
+    print(er.exchange_rate_default[from_curr])
+    print(er.exchange_rate_default[to_curr])
+    rate = er.exchange_rate_default[from_curr]/er.exchange_rate_default[to_curr]
 
     reverse_rate = 1 / rate if rate != 0 else 0
 
     print(
-            f"Курс {from_curr}→{to_curr}: {rate:.8f} (обновлено: {formatted_time})\n"
-            f"Обратный курс {to_curr}→{from_curr}: {reverse_rate:.2f}"
+            f"Курс {from_curr}→{to_curr}: {rate} (обновлено: {er._last_refresh})\n"
+            f"Обратный курс {to_curr}→{from_curr}: {reverse_rate}"
         )
 
-
+"""
 def get_rate(from_curr: str, to_curr: str) -> str:
-    """
+
     Обрабатывает команду get-rate: получает курс одной валюты к другой.
     
     Args:
@@ -450,7 +443,7 @@ def get_rate(from_curr: str, to_curr: str) -> str:
     
     Returns:
         Строка с результатом или сообщением об ошибке
-    """
+
     try:
         # 1. Валидация входных параметров
         if not from_curr or not to_curr:
@@ -508,4 +501,4 @@ def get_rate(from_curr: str, to_curr: str) -> str:
     except Exception as e:
         # Ловим непредвиденные ошибки
         return f"Неожиданная ошибка: {str(e)}"
-
+"""

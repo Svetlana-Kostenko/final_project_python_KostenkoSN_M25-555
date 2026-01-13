@@ -46,28 +46,21 @@ class CoinGeckoClient(BaseApiClient):
             
         try:
             response = requests.get(self.url, params=params, timeout=config.REQUEST_TIMEOUT)
-            print(response.url)
-            print(response.status_code)
             request_ms = int((time.time() - start_time) * 1000)
-            print(request_ms)
             status_code = response.status_code
             etag = response.headers.get("ETag", "")
-            print(etag)
-            response.raise_for_status()
-                
+            response.raise_for_status()         
             data = response.json()
-            print("data:", data)
             timestamp = datetime.now().isoformat()
-            print("timestamp:", timestamp)
+
             result = []
-            print(config.CRYPTO_ID_MAP.items())
             for code, cg_id in config.CRYPTO_ID_MAP.items():
                 if cg_id in data:
                     rate = data[cg_id][config.BASE_CURRENCY.lower()]
-                    result.append({
+                    temp = {
                         "from_currency": code,
                         "to_currency": config.BASE_CURRENCY,
-                        "rate": 1 / rate,  
+                        "rate": rate,  
                         "timestamp": timestamp,
                         "source": self._source,
                         "meta": {
@@ -76,10 +69,9 @@ class CoinGeckoClient(BaseApiClient):
                             "status_code": status_code,
                             "etag": etag or f"W/\"{hashlib.md5(response.text.encode()).hexdigest()[:6]}\""
 
-                }
-
                         }
-                    )
+                    }
+                    result.append(temp)
                 else:
                     print(f"Данные для {cg_id} не найдены")
                 
@@ -90,8 +82,7 @@ class CoinGeckoClient(BaseApiClient):
             return []
         except json.JSONDecodeError as e:
             print(f"Ошибка парсинга JSON: {e}")
-            return []
-            
+            return []            
         except Exceptionas as e:
                 print(e)
 
@@ -108,10 +99,10 @@ class ExchangeRateApiClient(BaseApiClient):
     def fetch_rates(self) -> Dict[str, float]:
         start_time = time.time()
         try:
-            response = requests.get(self.url, timeout=self.timeout)
+            response = requests.get(self._url, timeout=self.timeout)
             request_ms = int((time.time() - start_time) * 1000)
             status_code = response.status_code
-            etag =  response.header.get("ETag", "")
+            etag = response.headers.get("ETag", "")
             data = response.json()
             
             if data.get("result") != "success":
@@ -127,11 +118,11 @@ class ExchangeRateApiClient(BaseApiClient):
                         "to_currency": config.BASE_CURRENCY,
                         "rate": 1 / rate,
                         "timestamp": timestamp,
-                        "source":self.source,
+                        "source":self._source,
                         "meta": {"raw_id": from_currency,
                                 "request_ms": request_ms,
                                 "status_code": status_code,
-                                "etag": etag or f"W/\"{hashlib.md5(response.test.encode()).hesdigext()[:5]}\""
+                                "etag": etag or f"W/\"{hashlib.md5(response.text.encode()).hexdigest()[:5]}\""
                         }
                 }
                 rates.append(temp)
@@ -139,8 +130,10 @@ class ExchangeRateApiClient(BaseApiClient):
             return rates
 
         except requests.exceptions.RequestException as e:
-            raise ApiRequestError(f"Ошибка при запросе к ExchangeRate: {e}") from e
-            
+            raise ApiRequestError(f"Ошибка при запросе к ExchangeRate: {e}") from e            
+        except json.JSONDecodeError as e:
+            print(f"Ошибка парсинга JSON: {e}")
+            return []            
         except Exceptionas as e:
                 print(e)
 
