@@ -128,7 +128,7 @@ def show_portfolio(user: User, portfolio: Portfolio, er: Dict, base_currency: st
 
     print(f"\nПортфель пользователя '{user.username}' (база: {base_currency}):")
     
-    print(portfolio.wallets)
+
     for code, wallet in  portfolio.wallets.items():
         rate = er.exchange_rate_default[code] / er.exchange_rate_default[base_currency]
         print(f"- {code}: {wallet.balance} -> {rate*wallet.balance} {base_currency}")
