@@ -1,10 +1,11 @@
 import requests
 from abc import ABC, abstractmethod
 from typing import Dict
-from parse_service.config import config  # Импортируем конфигурацию
+from parse_service.config import config  
 import time
 import hashlib
 from datetime import datetime
+import json
 
 class ApiRequestError(Exception):
     """Исключение для ошибок при запросах к API."""
@@ -14,7 +15,7 @@ class BaseApiClient(ABC):
     """Абстрактный базовый класс для клиентов внешних API."""
     
     def __init__(self):
-        self._source = None  # Или raise NotImplementedError
+        self._source = None  
 
     @abstractmethod
     def fetch_rates(self) -> Dict[str, float]:
@@ -45,6 +46,7 @@ class CoinGeckoClient(BaseApiClient):
         start_time = time.time()
             
         try:
+            print("Подключаюсь к CoinGecko...")
             response = requests.get(self.url, params=params, timeout=config.REQUEST_TIMEOUT)
             request_ms = int((time.time() - start_time) * 1000)
             status_code = response.status_code
@@ -74,7 +76,7 @@ class CoinGeckoClient(BaseApiClient):
                     result.append(temp)
                 else:
                     print(f"Данные для {cg_id} не найдены")
-                
+            print("Курсы валют от CoinGecko получены")
             return result
                 
         except requests.exceptions.RequestException as e:
@@ -83,7 +85,7 @@ class CoinGeckoClient(BaseApiClient):
         except json.JSONDecodeError as e:
             print(f"Ошибка парсинга JSON: {e}")
             return []            
-        except Exceptionas as e:
+        except Exception as e:
                 print(e)
 
 
@@ -99,6 +101,7 @@ class ExchangeRateApiClient(BaseApiClient):
     def fetch_rates(self) -> Dict[str, float]:
         start_time = time.time()
         try:
+            print("Подключаюсь к ExchangeRate...")
             response = requests.get(self._url, timeout=self.timeout)
             request_ms = int((time.time() - start_time) * 1000)
             status_code = response.status_code
@@ -126,7 +129,7 @@ class ExchangeRateApiClient(BaseApiClient):
                         }
                 }
                 rates.append(temp)
-
+            print("Курсы валют от ExchangeRate получены")
             return rates
 
         except requests.exceptions.RequestException as e:
@@ -134,6 +137,6 @@ class ExchangeRateApiClient(BaseApiClient):
         except json.JSONDecodeError as e:
             print(f"Ошибка парсинга JSON: {e}")
             return []            
-        except Exceptionas as e:
+        except Exception as e:
                 print(e)
 

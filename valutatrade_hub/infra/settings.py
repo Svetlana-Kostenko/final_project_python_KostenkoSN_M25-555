@@ -1,6 +1,6 @@
 import json
 import os
-from typing import Any, Optional
+from typing import Any
 
 class SettingsLoader:
     _instance = None  # Хранилище единственного экземпляра

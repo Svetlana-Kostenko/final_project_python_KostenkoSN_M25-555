@@ -1,96 +1,16 @@
 import hashlib
-import datetime
 import json
 import os
-from typing import Any, Dict, Optional
-import json
-import time
+from typing import Any, Dict, Optional, Tuple
 from datetime import datetime, timedelta
-from typing import Optional, Dict, Tuple
 from valutatrade_hub.core.exceptions import InsufficientFundsError
+from constants import USERS_FILE, RATES_FILE
+from parse_service.updater import er
 
-# Путь к кешу
-RATES_FILE = "data/rates.json"
 
 # Время жизни кеша (5 минут)
 CACHE_TTL = 300  # секунд
 
-# Пути к файлам данных
-USERS_FILE = "data/users.json"
-PORTFOLIOS_FILE = "data/portfolios.json"
-
-
-def load_rates_as_dict(json_file: str) -> Dict[str, float]:
-    """
-    Читает файл rates.json и возвращает словарь {пара: rate}.
-
-    Args:
-        json_file: путь к JSON‑файлу.
-
-    Returns:
-        Словарь вида {'BTC_USD': 1.069438651651748e-05, 'ETH_USD': 0.0003134226378902895, ...}
-    """
-    try:
-        with open(json_file, 'r', encoding='utf-8') as f:
-            data = json.load(f)
-
-        # Извлекаем пары и их rates
-        rates_dict = {}
-        for pair_key, pair_info in data['pairs'].items():
-            rates_dict[pair_key] = pair_info['rate']
-
-        return rates_dict, data['last_refresh']
-
-    except FileNotFoundError:
-        print(f"Файл {json_file} не найден.")
-        return {}
-    except KeyError as e:
-        print(f"Ошибка: отсутствует ключ {e} в JSON.")
-        return {}
-    except json.JSONDecodeError as e:
-        print(f"Ошибка парсинга JSON: {e}")
-        return {}
-    except Exception as e:
-        print(f"Неожиданная ошибка: {e}")
-        return {}
-
-
-
-class ExchangeRates:
-    _instance = None  # Для синглтон‑паттерна
-
-    def __new__(cls):
-        if cls._instance is None:
-            cls._instance = super().__new__(cls)
-            # Инициализация при первом создании
-            cls._instance._exchange_rate_default, cls._instance._last_refresh = load_rates_as_dict(RATES_FILE)
-        return cls._instance
-
-    @property
-    def exchange_rate_default(self) -> dict:
-        """Геттер для словаря курсов валют."""
-        return self._exchange_rate_default
-
-    @exchange_rate_default.setter
-    def exchange_rate_default(self, value: dict) -> None:
-        """Сеттер для словаря курсов валют."""
-        if not isinstance(value, dict):
-            raise TypeError("exchange_rate_default должен быть словарем")
-        self._exchange_rate_default = value
-
-    @property
-    def last_refresh(self) -> str:
-        """Геттер для времени последнего обновления."""
-        return self._last_refresh
-
-    @last_refresh.setter
-    def last_refresh(self, value: str) -> None:
-        """Сеттер для времени последнего обновления."""
-        if not isinstance(value, str):
-            raise TypeError("last_refresh должен быть строкой в формате ISO 8601")
-        self._last_refresh = value
-
-er = ExchangeRates()
 
 class User:
     def __init__(
@@ -290,14 +210,7 @@ class Wallet:
 class Portfolio:
     """Портфель пользователя: управление кошельками в разных валютах."""
 
-    # Фиксированные курсы для упрощения (в реальной системе — API)
- #   EXCHANGE_RATES = {
-  #      "USD": 1.0,
-  #      "EUR": 1.1,    # 1 EUR = 1.1 USD
-  #      "BTC": 50000, # 1 BTC = 50 000 USD
-   #     "GBP": 1.3,
-  #      "JPY": 0.007
- #   }
+
 
     def __init__(self, user_id: int, wallets: Optional[Dict[str, Wallet]] = None):
         """

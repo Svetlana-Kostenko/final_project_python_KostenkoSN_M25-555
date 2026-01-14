@@ -1,59 +1,14 @@
-import datetime
 import hashlib
-import json
-import os
+from datetime import datetime, timezone
 from typing import Dict
-from valutatrade_hub.core.exceptions import CurrencyNotFoundError, InsufficientFundsError
-from valutatrade_hub.core.currencies import get_currency
-from datetime import datetime
-from typing import Tuple, Optional
-
-from valutatrade_hub.core.models import User, Portfolio, Wallet, ExchangeRates, RateService
-
-
-# Пути к файлам данных
-USERS_FILE = "data/users.json"
-PORTFOLIOS_FILE = "data/portfolios.json"
+from valutatrade_hub.core.exceptions import InsufficientFundsError
+from constants import PORTFOLIOS_FILE
+from parse_service.config import config
+from valutatrade_hub.core.models import User, Portfolio, Wallet
+from parse_service.updater import rates_updates
+from valutatrade_hub.core.utils import save_users, load_portfolios, save_portfolios, generate_salt
 
 
-def load_users() -> Dict[int, User]:
-    """Загружает пользователей из users.json."""
-    if not os.path.exists(USERS_FILE):
-        return {}
-    with open(USERS_FILE, "r", encoding="utf-8") as f:
-        data = json.load(f)
-    return {user["user_id"]: User.from_dict(user) for user in data}
-
-def save_users(users: Dict[int, User]):
-    """Сохраняет пользователей в users.json."""
-    data = [user.to_dict() for user in users.values()]
-    with open(USERS_FILE, "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
-
-def load_portfolios() -> list:
-    """Загружает портфели из portfolios.json (ожидает список)."""
-    if not os.path.exists(PORTFOLIOS_FILE):
-        return []  # Возвращаем пустой список, если файла нет
-
-    with open(PORTFOLIOS_FILE, "r", encoding="utf-8") as f:
-        data = json.load(f)
-
-    # Проверяем, что загруженные данные — это список
-    if not isinstance(data, list):
-        raise ValueError(f"Ожидался список в {PORTFOLIOS_FILE}, но получен {type(data)}")
-
-    return data
-
-def save_portfolios(portfolios):
-    """Сохраняет портфели в portfolios.json."""
-
-    
-    with open(PORTFOLIOS_FILE, "w", encoding="utf-8") as f:
-        json.dump(portfolios, f, ensure_ascii=False, indent=2)
-
-def generate_salt() -> str:
-    """Генерирует случайную соль."""
-    return hashlib.sha256(os.urandom(32)).hexdigest()[:16]
 
 def register_user(username: str, password: str):
     """Регистрирует нового пользователя."""
@@ -71,10 +26,10 @@ def register_user(username: str, password: str):
         raise ValueError("Пароль должен быть не короче 4 символов")
 
 
-    # Шаг 2: Генерируем user_id (автоинкремент)
+    # Генерируем user_id (автоинкремент)
     user_id = max(users.keys()) + 1 if users else 1
 
-    # Шаг 3: Генерируем соль и хешируем пароль
+    # Генерируем соль и хешируем пароль
     salt = generate_salt()
     password_salt = password + salt
     hashed_password = hashlib.sha256(password_salt.encode()).hexdigest()
@@ -88,13 +43,13 @@ def register_user(username: str, password: str):
         registration_date=datetime.now()
     )
 
-    # Добавляем пользователя в словарь
+
     users[user_id] = user
 
-    # Шаг 4: Сохраняем пользователей
+    # Сохраняем пользователей
     save_users(users)
 
-    # Шаг 5: Создаём пустой портфель
+    # Cоздаём пустой портфель
     portfolios = load_portfolios()
     currency = input("Введите валюту: ").strip().upper()
     amount = input("Введите баланс: ")
@@ -104,7 +59,7 @@ def register_user(username: str, password: str):
             value = int(amount)
         else:
             value = float(amount)
-    except:        
+    except (ValueError, TypeError):        
         raise TypeError("Баланс должен быть числом (int или float).")
     if value < 0:
             raise ValueError("Баланс не может быть отрицательным.")
@@ -115,7 +70,7 @@ def register_user(username: str, password: str):
     portfolios.append(user_portfolio.to_dict())
     save_portfolios(portfolios)
 
-    # Шаг 6: Выводим сообщение об успехе
+    # Выводим сообщение об успехе
     print(f"Пользователь '{username}' зарегистрирован (id={user_id}). Войдите: login --username {username} --password ****")
     
     
@@ -125,7 +80,7 @@ def login_user(username: str, password: str):
     users = User.load_users()
     portfolios = Portfolio.load_from_file(PORTFOLIOS_FILE)
     
-    # Шаг 1: Найти пользователя по username
+    # Найти пользователя по username
     user = None
     for u in users.values():
         if u.username == username:
@@ -141,7 +96,7 @@ def login_user(username: str, password: str):
             portfolio = p    
     
     
-    # Шаг 2: Сравнить хеш пароля
+    # Сравнить хеш пароля
     if user.verify_password(password):
         print(f"Вы вошли как '{username}'")
     else:
@@ -153,29 +108,16 @@ def show_portfolio(user: User, portfolio: Portfolio, er: Dict, base_currency: st
     """
     Показывает портфель пользователя в заданной базовой валюте.
     """
-    
-   # portfolios = Portfolio.load_from_file(PORTFOLIOS_FILE)   
-
-
 
     if not user:
         print("Сначала выполните login")
         return
 
 
-
     if not portfolio:
         print(f"Портфель пользователя '{user.username}' пуст")
         return
 
-    # Курсы валют (в реальности нужно брать из API; здесь — заглушка)
- #   exchange_rates = {
-    #    "USD": 1.0,
-    #    "EUR": 1.07,
-    #    "BTC": 59300.0,  # примерная стоимость
-   #     "GBP": 1.26,
-   #     "JPY": 0.0067,
-  #  }
 
     # Проверить, что базовая валюта известна
     if base_currency not in er.exchange_rate_default:
@@ -194,8 +136,7 @@ def show_portfolio(user: User, portfolio: Portfolio, er: Dict, base_currency: st
     total_in_base = portfolio.get_total_value(base_currency)
 
 
-
-    # Шаг 5: Итоговая сумма
+    # Bnоговая сумма
     print("-" * 40)
     print(f"ИТОГО: {total_in_base:.2f} {base_currency}\n")
     
@@ -204,12 +145,13 @@ def buy(user: User, currency: str, amount: float, base_currency: str = "USD"):
     
     """
      Команда покупки валюты.
+     Аргументы
+    - user: объект класса User
+    - currency: код валюты (например, 'BTC')
+    - amount: количество валюты для покупки (должно быть > 0)
+    - base_currency: базовая валюта для расчёта стоимости (по умолчанию USD)
     
-    :param portfolio: объект Portfolio пользователя
-    :param currency: код валюты (например, 'BTC')
-    :param amount: количество валюты для покупки (должно быть > 0)
-    :param base_currency: базовая валюта для расчёта стоимости (по умолчанию USD)
-    :return: строка с результатом выполнения команды
+    return: строка с результатом выполнения команды
     """
     if not user:
         return "Пожалуйста, авторизуйтесь."
@@ -219,15 +161,12 @@ def buy(user: User, currency: str, amount: float, base_currency: str = "USD"):
     for i, p in enumerate(portfolios):
         if p.user == user.user_id:
             index = i
-            portfolio = p
-               
-
-
+            portfolio = p            
 
     if portfolio is None:
         raise "Портфель пуст"
 
-    # Шаг 2. Валидировать аргументы
+    # Валидировать аргументы
     if not isinstance(currency, str) or not currency.strip():
         raise ValueError("Ошибка: код валюты не может быть пустым.")
     
@@ -241,10 +180,8 @@ def buy(user: User, currency: str, amount: float, base_currency: str = "USD"):
     if amount <= 0:
         raise ValueError("'amount' должен быть положительным числом.")
 
-
-
     
-    # Шаг 3. Проверить наличие кошелька, при отсутствии — создать
+    # Проверить наличие кошелька, при отсутствии — создать
     try:
         if portfolio.get_wallet(currency) is None:
             portfolio.add_currency(currency)
@@ -253,12 +190,6 @@ def buy(user: User, currency: str, amount: float, base_currency: str = "USD"):
         
     wallet_base_currency = portfolio.get_wallet(base_currency)
  
-    current_balance =  wallet_base_currency.balance
-
-    # Шаг 4. Увеличить баланс кошелька
-
-    # Шаг 5. Расчёт стоимости покупки (опционально)
-
     # Получаем курс валюты к базовой
     if currency not in portfolio.EXCHANGE_RATES:
         raise KeyError(f"Курс для {currency} не найден.")
@@ -268,7 +199,7 @@ def buy(user: User, currency: str, amount: float, base_currency: str = "USD"):
         
     rate = portfolio.EXCHANGE_RATES[currency] / portfolio.EXCHANGE_RATES[base_currency]
     cost = amount * rate
-
+    current_balance =  wallet_base_currency.balance
     if current_balance < cost:
         raise InsufficientFundsError(
                 available=current_balance,
@@ -276,14 +207,7 @@ def buy(user: User, currency: str, amount: float, base_currency: str = "USD"):
                 code=base_currency
             )        
          
-    wallet_currency = portfolio.get_wallet(currency)
-
-            
-  
-  
-    
-
-        
+    wallet_currency = portfolio.get_wallet(currency) 
          
     try:
         wallet_currency.deposit(amount)
@@ -300,8 +224,6 @@ def buy(user: User, currency: str, amount: float, base_currency: str = "USD"):
     portfolios_as_dicts = [p.to_dict() if isinstance(p, Portfolio) else p for p in portfolios]
     save_portfolios(portfolios_as_dicts)
     
-    
-
     return portfolio
 
     
@@ -324,15 +246,14 @@ def sell(user: User, currency: str, amount: float, base_currency: str = "USD"):
     for i, p in enumerate(portfolios):
         if p.user == user.user_id:
             index = i
-            portfolio = p
-               
+            portfolio = p  
 
 
 
     if portfolio is None:
         raise "Портфель пуст"
 
-    # Шаг 2. Валидировать аргументы
+    # Валидировать аргументы
     if not isinstance(currency, str) or not currency.strip():
         raise ValueError("Ошибка: код валюты не может быть пустым.")
     
@@ -348,8 +269,6 @@ def sell(user: User, currency: str, amount: float, base_currency: str = "USD"):
 
 
 
-    
-
     try:
         if portfolio.get_wallet(currency) is None:
             raise ValueError("Валюты {currency} в кошельке нет")
@@ -357,12 +276,6 @@ def sell(user: User, currency: str, amount: float, base_currency: str = "USD"):
         return f"Ошибка: {str(e)}"
         
     wallet_base_currency = portfolio.get_wallet(base_currency)
- 
-    current_balance =  wallet_base_currency.balance
-
-    # Шаг 4. Увеличить баланс кошелька
-
-    # Шаг 5. Расчёт стоимости продажи (опционально)
 
     # Получаем курс валюты к базовой
     if currency not in portfolio.EXCHANGE_RATES:
@@ -383,8 +296,6 @@ def sell(user: User, currency: str, amount: float, base_currency: str = "USD"):
             code=currency
         )
 
-
-        
          
     try:
         wallet_base_currency.deposit(cost)
@@ -411,7 +322,7 @@ def get_rate(from_curr, to_curr, er) -> str:
     args — список аргументов после имени команды (например, ["--from", "USD", "--to", "BTC"]).
     """
 
-    # 1. Валидация кодов валют
+    # Bалидация кодов валют
     if not from_curr or not to_curr:
         return "Ошибка: коды валют не могут быть пустыми."
     if not from_curr.isalpha() or not to_curr.isalpha():
@@ -420,85 +331,23 @@ def get_rate(from_curr, to_curr, er) -> str:
     from_curr = from_curr.upper()
     to_curr = to_curr.upper()
 
-
-    print(er.exchange_rate_default[from_curr])
-    print(er.exchange_rate_default[to_curr])
     rate = er.exchange_rate_default[from_curr]/er.exchange_rate_default[to_curr]
 
     reverse_rate = 1 / rate if rate != 0 else 0
-
+    
+    last_refresh_seconds_ago = (datetime.now(timezone.utc)-datetime.fromisoformat(er._last_refresh.replace('Z', '+00:00'))).total_seconds()
     print(
             f"Курс {from_curr}→{to_curr}: {rate} (обновлено: {er._last_refresh})\n"
             f"Обратный курс {to_curr}→{from_curr}: {reverse_rate}"
         )
-
-"""
-def get_rate(from_curr: str, to_curr: str) -> str:
-
-    Обрабатывает команду get-rate: получает курс одной валюты к другой.
-    
-    Args:
-        from_curr: код исходной валюты (например, 'USD')
-        to_curr: код целевой валюты (например, 'BTC')
-    
-    Returns:
-        Строка с результатом или сообщением об ошибке
-
-    try:
-        # 1. Валидация входных параметров
-        if not from_curr or not to_curr:
-            return "Ошибка: коды валют не могут быть пустыми."
-
-        if not isinstance(from_curr, str) or not isinstance(to_curr, str):
-            return "Ошибка: коды валют должны быть строками."
-
-        # Нормализация: верхний регистр, обрезка пробелов
-        from_curr = from_curr.strip().upper()
-        to_curr = to_curr.strip().upper()
-
-        # Проверка формата кода (2–5 букв)
-        if not (2 <= len(from_curr) <= 5) or not from_curr.isalpha():
-            return f"Ошибка: некорректный код валюты '{from_curr}'. Должно быть 2–5 букв."
-        if not (2 <= len(to_curr) <= 5) or not to_curr.isalpha():
-            return f"Ошибка: некорректный код валюты '{to_curr}'. Должно быть 2–5 букв."
-
-        # 2. Проверка существования валют в реестре
-        try:
-            get_currency(from_curr)
-        except CurrencyNotFoundError:
-            return (f"Ошибка: валюта '{from_curr}' не найдена. "
-                   f"Используйте 'help get-rate' для списка поддерживаемых валют.")
-
-        try:
-            get_currency(to_curr)
-        except CurrencyNotFoundError:
-            return (f"Ошибка: валюта '{to_curr}' не найдена. "
-                   f"Используйте 'help get-rate' для списка поддерживаемых валют.")
-
-        # 3. Получение курса
-        rate_service = RateService()
-        result: Optional[Tuple[float, str]] = rate_service.get_rate(from_curr, to_curr)
-
-        if result is None:
-            return f"Курс {from_curr}→{to_curr} недоступен. Повторите попытку позже."
-
-        rate, timestamp = result
-
-        # 4. Форматирование вывода
-        dt = datetime.fromisoformat(timestamp)
-        formatted_time = dt.strftime("%Y-%m-%d %H:%M:%S")
-        reverse_rate = 1 / rate if rate != 0 else 0
-
-        return (
-            f"Курс {from_curr}→{to_curr}: {rate:.8f} (обновлено: {formatted_time})\n"
-            f"Обратный курс {to_curr}→{from_curr}: {reverse_rate:.2f}"
+    if last_refresh_seconds_ago >  config.CACHE_TTL:
+        print("Данные устарели. Запускаю процесс обновления")
+        rates_updates.run_update()
+        rate = er.exchange_rate_default[from_curr]/er.exchange_rate_default[to_curr]
+        reverse_rate = 1 / rate if rate != 0 else 0  
+        print(
+                f"Курс {from_curr}→{to_curr}: {rate} (обновлено: {er._last_refresh})\n"
+                f"Обратный курс {to_curr}→{from_curr}: {reverse_rate}"
+        
         )
 
-    except CurrencyNotFoundError as e:
-        # Дополнительный обработчик на случай, если исключение проскочило выше
-        return (f"Ошибка: {e}. "
-               f"Используйте 'help get-rate' для списка поддерживаемых валют.")
-    except Exception as e:
-        # Ловим непредвиденные ошибки
-        return f"Неожиданная ошибка: {str(e)}"
-"""
